@@ -111,10 +111,6 @@ async function init() {
     setStatus('Push notifications are not supported in this browser.', 'err');
     return;
   }
-  if (VAPID_PUBLIC_KEY === "BGlGDWc7U1Ppyd8suGbuWYyIPJ44GRD5Ixx0NNvM_x1AYBhwUhKqZ8Rd0F8HuBeOUInGEvrKaoVeHMFHBah-Bq0") {
-    setStatus('VAPID public key not configured yet — edit index.html.', 'err');
-    return;
-  }
 
   await navigator.serviceWorker.register('sw.js');
   setStatus('Ready. Tap "Enable Notifications" to subscribe.', 'info');
