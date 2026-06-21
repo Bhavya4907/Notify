@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hostel Alert Subscriber</title>
+<style>
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    max-width: 560px;
+    margin: 40px auto;
+    padding: 0 20px;
+    line-height: 1.5;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.4rem; }
+  button {
+    font-size: 1rem;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+    margin: 8px 8px 8px 0;
+  }
+  button:disabled { background: #94a3b8; cursor: not-allowed; }
+  textarea {
+    width: 100%;
+    height: 160px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    margin-top: 12px;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  .status {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    font-size: 0.9rem;
+  }
+  .ok { background: #dcfce7; color: #166534; }
+  .err { background: #fee2e2; color: #991b1b; }
+  .info { background: #dbeafe; color: #1e40af; }
+  code {
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  ol li { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<h1>🏠 Hostel Notice Alert — Subscribe</h1>
+<p>Tap the button below, allow notifications when your browser asks, then copy the subscription JSON into your repo. One-time setup.</p>
+
+<div id="status" class="status info">Checking browser support…</div>
+
+<button id="subscribeBtn" disabled>Enable Notifications</button>
+<button id="testBtn" disabled>Send Test Notification</button>
+
+<div id="result" style="display:none;">
+  <p><strong>Step: copy this into <code>subscription.json</code> in your repo, then commit it.</strong></p>
+  <textarea id="subJson" readonly></textarea>
+  <button id="copyBtn">Copy to Clipboard</button>
+</div>
+
+<hr style="margin: 32px 0;">
+<details>
+  <summary>Troubleshooting</summary>
+  <ul>
+    <li>This must be opened over <strong>HTTPS</strong> (GitHub Pages gives you this automatically) — won't work on <code>file://</code>.</li>
+    <li>On iPhone: Add this page to your Home Screen first (Share → Add to Home Screen), then open it FROM the home screen icon — Safari only allows push notifications for installed/home-screen web apps, not regular tabs.</li>
+    <li>On Android/Desktop Chrome: works directly in the browser tab, no install needed.</li>
+    <li>If you ever clear browser data or reinstall, you'll need to resubscribe (repeat this page) and update <code>subscription.json</code>.</li>
+  </ul>
+</details>
+
+<script>
+// ====== CONFIGURE THIS: paste your own VAPID public key here ======
+const VAPID_PUBLIC_KEY = "BGlGDWc7U1Ppyd8suGbuWYyIPJ44GRD5Ixx0NNvM_x1AYBhwUhKqZ8Rd0F8HuBeOUInGEvrKaoVeHMFHBah-Bq0";
+// =====================================================================
+
+const statusEl = document.getElementById('status');
+const subscribeBtn = document.getElementById('subscribeBtn');
+const testBtn = document.getElementById('testBtn');
+const resultDiv = document.getElementById('result');
+const subJsonEl = document.getElementById('subJson');
+const copyBtn = document.getElementById('copyBtn');
+
+function setStatus(msg, type) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status ' + type;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function init() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    setStatus('Push notifications are not supported in this browser.', 'err');
+    return;
+  }
+  if (VAPID_PUBLIC_KEY === "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE") {
+    setStatus('VAPID public key not configured yet — edit index.html.', 'err');
+    return;
+  }
+
+  await navigator.serviceWorker.register('sw.js');
+  setStatus('Ready. Tap "Enable Notifications" to subscribe.', 'info');
+  subscribeBtn.disabled = false;
+}
+
+subscribeBtn.addEventListener('click', async () => {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      setStatus('Permission denied. You must allow notifications for this to work.', 'err');
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+
+    const subJson = JSON.stringify(subscription.toJSON(), null, 2);
+    subJsonEl.value = subJson;
+    resultDiv.style.display = 'block';
+    testBtn.disabled = false;
+
+    setStatus('Subscribed! Now copy the JSON below into subscription.json in your repo.', 'ok');
+  } catch (err) {
+    setStatus('Error subscribing: ' + err.message, 'err');
+    console.error(err);
+  }
+});
+
+copyBtn.addEventListener('click', () => {
+  subJsonEl.select();
+  navigator.clipboard.writeText(subJsonEl.value).then(() => {
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => copyBtn.textContent = 'Copy to Clipboard', 1500);
+  });
+});
+
+testBtn.addEventListener('click', async () => {
+  const registration = await navigator.serviceWorker.ready;
+  registration.showNotification('🏠 Test Notification', {
+    body: 'If you see this, push display works! (This is a local test, not from the server.)',
+    icon: 'icon.png',
+    tag: 'test'
+  });
+});
+
+init();
+</script>
+
+</body>
+</html>

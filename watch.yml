@@ -1,0 +1,64 @@
+name: Hostel Notice Watcher (Web Push)
+
+on:
+  schedule:
+    - cron: "*/3 * * * *"
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  watch:
+    # Only run the watcher on schedule/manual trigger, not on every push
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run watcher
+        env:
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: node watcher.js
+
+      - name: Commit updated state
+        run: |
+          git config user.name "hostel-watcher-bot"
+          git config user.email "actions@github.com"
+          git add seen_notices.json
+          git diff --staged --quiet || git commit -m "Update seen notices [skip ci]"
+          git push
+
+  deploy-pages:
+    # Deploys the subscribe page whenever you push changes to main
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "public"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
